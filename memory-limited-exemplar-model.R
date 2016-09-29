@@ -34,8 +34,22 @@
 sample.training.data <- data.frame(x=c(0.5,0.6), y=c(0.4,0.3), category=c(1,2))
 
 exemplar.memory.limited <- function(training.data, x.val, y.val, target.category, sensitivity, decay.rate){
-  return(NA)
+  if(nrow(training.data) == 0){
+    return(0.5)
+  }
+  training.data$weight <- 1*decay.rate^seq(nrow(training.data)-1,0,-1)
+  training.data$dist <- sqrt((training.data$x - x.val)^2+(training.data$y - y.val)^2)
+  training.data$sim <- exp(-sensitivity*training.data$dist)
+  training.data$mwsim <-  training.data$sim*training.data$weight
+  target.sim <- sum(subset(training.data, training.data$category == target.category)$mwsim)
+  all.sim <- sum(training.data$mwsim)
+  if((target.sim/all.sim) == 0){
+    return(1*10^-50)
+  } 
+  return(target.sim/all.sim)
 }
+
+exemplar.memory.limited(sample.training.data,0.55,0.35,1,1,1.1)
 
 # Once you have the model implemented, write the log-likelihood function for a set of data.
 # The set of data for the model will look like this:
@@ -47,7 +61,7 @@ sample.data.set <- data.frame(x=c(0.5,0.6,0.4,0.5,0.3), y=c(0.4,0.3,0.6,0.4,0.5)
 # It also means that you have to do a little work to separate the training and test data for each trial.
 # If the subject is on trial 4 of the sample.data.set then the training data will be:
 
-sample.data.set[0:3,]
+sample.data.set[1:1,]
 
 # and the test item will be
 
@@ -59,6 +73,29 @@ sample.data.set[4,]
 
 # Don't forget that decay rate should be between 0 and 1, and that sensitivity should be > 0.
 
-exemplar.memory.log.likelihood <- function(all.data, sensitivity, decay.rate){
-  return(NA)
+loglike <- function(chance, bool){
+  if(bool){
+    return(log(chance))
+  }
+  else{
+    return(log(1 - chance))
+  }
 }
+
+exemplar.memory.log.likelihood <- function(params){
+  all.data <- read.csv('experiment-data.csv')
+  sensitivity <- params[1] 
+  decay.rate <- params[2]
+  sumlog <- 0
+  for (i in seq(1,nrow(all.data))) {
+     loli <-loglike(
+                  exemplar.memory.limited(
+                      all.data[0:(i-1),],all.data[i,]$x,all.data[i,]$y,all.data[i,]$category,sensitivity,decay.rate),
+                  all.data[i,]$correct)
+     sumlog <- sumlog + loli
+  }
+  return(-sumlog)
+}
+
+exemplar.memory.log.likelihood(c(1,0.5))
+
